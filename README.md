@@ -1,5 +1,102 @@
 # 研途 OS · YanTu OS
 
+## 项目详解与首次部署
+
+研途 OS 是面向个人的中文学习管理应用，提供计划、计时、知识体系、错题、规则复习、资料和统计。AI 是可选辅助，基础学习数据的保存和统计不依赖模型服务。
+
+技术结构为 **React + TypeScript + Vite → FastAPI → SQLite + 本地附件**。前端构建后由同一个后端进程提供，无需另开常驻 Node 服务；采用个人、单用户、单进程部署方式。
+
+### 从新电脑开始
+
+```bash
+git clone https://github.com/huj911419-ctrl/YanTuOS.git
+cd YanTuOS
+./scripts/install.sh
+./scripts/start.sh
+```
+
+默认打开 `http://127.0.0.1:8000`。安装脚本准备项目环境并构建前端，不自动安装系统服务。仓库已有验证环境使用 Python 3.14；前端要求 Node.js 22.12+、pnpm 11.25，详见 [package.json](frontend/package.json) 与安装脚本。
+
+停止、查询与诊断：
+
+```bash
+./scripts/status.sh
+./scripts/doctor.sh
+./scripts/stop.sh
+```
+
+下方出现的 `/home/hjj/Development/YanTuOS` 是维护者原有部署路径；克隆到其他位置时，在自己的仓库目录执行对应脚本即可。
+
+### 功能如何串起来
+
+| 模块 | 主要使用方式 |
+| --- | --- |
+| 计划与目标 | 创建日任务、周计划和阶段目标，跟踪状态、优先级与关联进度 |
+| 专注计时 | 正向计时或番茄钟；暂停/恢复、手动补录和真实时长统计 |
+| 知识地图 | 按科目、章节和父子知识点管理掌握程度、来源与学习记录 |
+| 错题与复习 | 记录题目/图片与错因，关联知识点，按复习结果更新后续日程 |
+| 学习统计 | 从实际任务、时长、错题和复习记录生成分析与规则建议 |
+| 学习资料 | 保存文本层 PDF、Markdown/TXT、笔记与知识关联 |
+| AI 助手 | 配置模型服务，选择允许使用的学习内容，预览后明确发送 |
+| 数据管理 | 导出数据、完整备份、隔离恢复预览与确认覆盖 |
+
+初始数学知识目录只是可编辑参考，不是官方考试大纲。AI 建议不会自动改写学习记录；扫描 PDF 不提供 OCR。
+
+### 源码结构与数据流
+
+| 路径 | 职责 |
+| --- | --- |
+| [backend/app/main.py](backend/app/main.py) | 应用装配、核心 API、访问防护与静态页面 |
+| [backend/app/routes/](backend/app/routes/) | 学习扩展、资料、AI 和数据管理路由 |
+| [backend/app/services/](backend/app/services/) | 计时、复习、统计、认证、备份和模型适配 |
+| [backend/app/migrations/](backend/app/migrations/) | 按编号执行的 SQLite 迁移 |
+| [frontend/src/App.tsx](frontend/src/App.tsx) | 应用框架、导航及核心学习界面 |
+| [frontend/src/pages/](frontend/src/pages/) | 计划、分析、AI、资料和设置页面 |
+| [frontend/src/components/](frontend/src/components/) | 共享表单、请求、附件和 PWA 组件 |
+| [scripts/](scripts/) | 安装、构建、启停、测试、备份与证书工具 |
+| [backend/tests/](backend/tests/)、[frontend/e2e/](frontend/e2e/) | 后端和浏览器验收 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 数据模型、事务、时间、认证和恢复约定 |
+
+浏览器通过 `/api` 写入后端，SQLite 事务保存数据，附件单独存放。精确时间以 UTC 保存、统计按北京时间切日；计时在服务端结算，不能依赖浏览器后台定时器。数据库迁移应新增编号 SQL，保留既有 ID 和关联。
+
+### 配置、数据和备份
+
+[.env.example](.env.example) 提供监听、访问令牌、TLS 和模型配置的名称。密钥放在自己的 `.env`，数据与附件位于运行数据目录，不应纳入 Git。
+
+建议区分以下备份方式：
+
+- **完整 ZIP**：数据库、登记附件与校验清单，适合迁移和完整恢复。
+- **JSON**：结构化数据，不包含附件二进制；含附件的学习库应使用完整 ZIP。
+- **SQLite 快照**：仅数据库，不能单独代表所有资料文件。
+
+恢复先在隔离目录校验，页面覆盖要求明确确认；不要把导入预览当成已覆盖数据。脚本和恢复步骤见下方说明与 [用户指南](docs/USER_GUIDE.md)。
+
+### 手机与离线边界
+
+默认只在本机运行。手机访问需要电脑开机、网络可达和正确的局域网 HTTPS/令牌配置，操作步骤见下方“手机访问”。
+
+PWA 缓存静态资源与基础离线页，不缓存个人 API 或提供服务断开时的完整离线编辑；没有后台云同步。iPhone 尺寸浏览器测试不等于物理 iPhone 安装与联网验收。
+
+### 开发、验证与已知限制
+
+```bash
+./scripts/backend-dev.sh
+```
+
+另开终端运行 `./scripts/frontend-dev.sh`。完整检查入口：
+
+```bash
+./scripts/test.sh
+```
+
+该脚本串联 pytest、前端构建、独立临时数据的真实进程检查与 Playwright。首次执行浏览器测试还需准备对应浏览器，步骤见下方原有维护说明。
+
+当前功能与证据分别见 [功能状态](docs/FEATURE_STATUS.md)、[测试报告](docs/TEST_REPORT.md)、[交付说明](docs/DELIVERY.md)。真实模型效果、真实 iPhone、长期大规模数据与其他第三方兼容性只能依据各自验收记录判断。当前也没有 OCR、多用户服务或后台云同步。
+
+贡献规范见 [CONTRIBUTING.md](CONTRIBUTING.md)，项目许可证为 [MIT](LICENSE)。以下保留原有详细使用、局域网配置、AI 和备份说明。
+
+---
+
 面向个人长期使用的中文考研学习平台。React + TypeScript + Vite、FastAPI、SQLite，单进程部署。学习任务、计时、错题、复习和统计均可在**没有 AI API**的情况下使用。
 
 项目目录：`/home/hjj/Development/YanTuOS`。当前为 0.2 系列，沿用并升级原 MVP；没有预设考试数学类别，没有演示学习记录。21 个初始数学知识点仅是可编辑的参考目录，**不是官方考试大纲**。
